@@ -8,11 +8,13 @@ import (
 )
 
 type Config struct {
-	Key     []byte
-	Level   string
-	Address string
-	Port    int
-	DBPath  string
+	Key       []byte
+	Level     string
+	Address   string
+	Port      int
+	DBPath    string `default:"./db.bolt"`
+	AdminRole string `default:"admin"`
+	UserRole  string `default:"user"`
 }
 
 const (

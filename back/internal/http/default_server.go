@@ -5,26 +5,31 @@ import (
 	"log/slog"
 	"todo/internal/auth"
 	"todo/internal/mail"
+	"todo/internal/user"
 
 	"github.com/labstack/echo/v4"
 )
 
 type DefaultServer struct {
-	srv    *echo.Echo
-	logger *slog.Logger
+	srv       *echo.Echo
+	logger    *slog.Logger
+	adminRole string
 }
 
-func GetDefaultServer(echo *echo.Echo, log *slog.Logger) *DefaultServer {
+func GetDefaultServer(echo *echo.Echo, log *slog.Logger, adminRole string) *DefaultServer {
 	return &DefaultServer{
-		srv:    echo,
-		logger: log,
+		srv:       echo,
+		logger:    log,
+		adminRole: adminRole,
 	}
 }
 
-func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.DefaultHandler) error {
-
+func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.DefaultHandler, userHandler *user.DefaultHandler) error {
 	// api/v1
 	v1grp := s.srv.Group("/api/v1")
+
+	// user
+	userGrp := v1grp.Group("/user")
 
 	// auth
 	authGrp := v1grp.Group("/auth")
@@ -32,7 +37,7 @@ func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.
 	// admin
 	adminGrp := v1grp.Group("/admin",
 		authHandler.AddUserClaim(),
-		authHandler.VerifyRole([]string{auth.AdminRole}),
+		authHandler.VerifyRole([]string{s.adminRole}),
 	)
 
 	// admin/mail
@@ -41,6 +46,7 @@ func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.
 	// add handlers
 	authHandler.AddHandler(authGrp)
 	mailHandler.AddHandler(mailGrp)
+	userHandler.AddHandler(userGrp, authHandler.AddUserClaim())
 
 	return nil
 }

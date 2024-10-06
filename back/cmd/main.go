@@ -10,6 +10,8 @@ import (
 	"todo/internal/http"
 	"todo/internal/log"
 	"todo/internal/mail"
+	userDB "todo/internal/repo/user"
+	"todo/internal/user"
 
 	"github.com/boltdb/bolt"
 	"github.com/golang-jwt/jwt"
@@ -49,27 +51,32 @@ func loadServices(cfg *config.Config) (*Services, error) {
 
 	logger := log.NewDefaultService(cfg.Level, appID, hostname)
 
-	db, err := bolt.Open(cfg.DBPath, os.ModeAppend, nil)
+	db, err := bolt.Open(cfg.DBPath, 0777, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db > %w", err)
 	}
 
-	// auth
-	authRepo, err := auth.NewDefaultRepo(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create authRepo > %w", err)
-	}
-	authCache := cache.New(time.Hour, time.Minute*20)
-	authSvc := auth.NewDefaultService(cfg.Key, jwt.SigningMethodHS256, logger, authCache, authRepo)
-	authHandler := auth.NewDefaultHandler(authSvc, logger)
-
 	// mail
+	mailCache := cache.New(time.Hour*24, time.Hour)
+	mailSvc := mail.NewDefaultService(logger, mailCache)
 	mailHandler := mail.NewDefaultHandler()
+
+	// user
+	userCache := cache.New(time.Hour, time.Minute*20)
+	userRepo, err := userDB.NewDefaultRepo(db, userCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create userRepo > %w", err)
+	}
+	userHandler := user.NewDefaultHandler(userRepo, logger, mailSvc, cfg.UserRole)
+
+	// auth
+	authSvc := auth.NewDefaultService(cfg.Key, jwt.SigningMethodHS256, logger)
+	authHandler := auth.NewDefaultHandler(authSvc, logger, userRepo)
 
 	// server
 	e := echo.New()
-	srv := http.GetDefaultServer(e, logger)
-	err = srv.LoadRoutes(authHandler, mailHandler)
+	srv := http.GetDefaultServer(e, logger, cfg.AdminRole)
+	err = srv.LoadRoutes(authHandler, mailHandler, userHandler)
 	if err != nil {
 		return nil, err
 	}
