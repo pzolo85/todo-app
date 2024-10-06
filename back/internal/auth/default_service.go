@@ -3,16 +3,21 @@ package auth
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
+	"github.com/patrickmn/go-cache"
 )
 
 type DefaultService struct {
 	key           []byte
 	signingMethod jwt.SigningMethod
 	logger        *slog.Logger
+	cache         *cache.Cache
+	repo          Repo
+	m             sync.Mutex
 }
 
 type UserClaim struct {
@@ -21,17 +26,20 @@ type UserClaim struct {
 	SourceIP  string    `json:"source_address" mapstructure:"source_address"`
 	UserAgent string    `json:"user_agent" mapstructure:"user_agent"`
 	Role      string    `json:"role" mapstructure:"role"`
+	Validated bool      `json:"validated" mapstructure:"validated"`
 }
 
 func (u UserClaim) Valid() error {
 	return validateUser(&u)
 }
 
-func NewDefaultService(key []byte, signingMethod jwt.SigningMethod, logger *slog.Logger) *DefaultService {
+func NewDefaultService(key []byte, signingMethod jwt.SigningMethod, logger *slog.Logger, cache *cache.Cache, repo Repo) *DefaultService {
 	return &DefaultService{
 		key:           key,
 		signingMethod: signingMethod,
 		logger:        logger,
+		cache:         cache,
+		repo:          repo,
 	}
 }
 
@@ -39,16 +47,7 @@ func (s *DefaultService) GetJWT(u *UserClaim) (string, error) {
 	if err := u.Valid(); err != nil {
 		return "", err
 	}
-	//if err := validateUser(u); err != nil {
-	//return "", err
-	//}
 
-	//t := jwt.NewWithClaims(s.signingMethod, jwt.MapClaims{
-	//"email":          u.Email,
-	//"created_at":     u.CreatedAt.Format(time.RFC3339),
-	//"source_address": string(u.SourceIP),
-	//"user_agent":     u.UserAgent,
-	//})
 	t := jwt.NewWithClaims(s.signingMethod, u)
 	tstr, err := t.SignedString(s.key)
 	if err != nil {
@@ -92,12 +91,32 @@ func (s *DefaultService) DecodeToken(t string) (*UserClaim, error) {
 		return nil, fmt.Errorf("failed to validate claims > %w", user.Valid())
 	}
 
+	//	 check if user is still valid
+	s.m.Lock()
+	defer s.m.Unlock()
+	cachedUser, ok := s.cache.Get(user.Email)
+	if !ok {
+		userDB, err := s.repo.GetUser(user.Email)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user from db > %w", err)
+		}
+		s.cache.Set(user.Email, userDB, cache.DefaultExpiration)
+		cachedUser = userDB
+	}
+	user.Role = cachedUser.(*UserClaim).Role
+	user.Validated = cachedUser.(*UserClaim).Validated
+
 	return &user, nil
 }
 
+func (s *DefaultService) ClearUser(email string) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.cache.Delete(email)
+}
+
 func validateUser(u *UserClaim) error {
-	fmt.Println("about to validate userclaim", "claim", u)
-	if u.Email == "" || u.SourceIP == "" || u.UserAgent == "" {
+	if u.Email == "" || u.SourceIP == "" || u.UserAgent == "" || u.Role == "" {
 		return fmt.Errorf("%#v is not a valid user", u)
 	}
 	return nil

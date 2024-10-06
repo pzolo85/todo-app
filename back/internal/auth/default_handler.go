@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,9 @@ type LoginResponse struct {
 const (
 	AdminRole = "admin"
 	UserRole  = "user"
+)
+const (
+	userClaim = "user_claims"
 )
 
 func NewDefaultHandler(svc Service, log *slog.Logger) *Handler {
@@ -65,12 +69,56 @@ func (h *Handler) AddHandler(g *echo.Group) {
 	})
 }
 
-func (h *Handler) GetAuthMiddleware(userLevel string) echo.MiddlewareFunc {
+func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			user, ok := c.Get(userClaim).(*UserClaim)
+			if !ok {
+				h.log.Warn("failed to extract claims from context")
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
+			}
+
+			if !slices.Contains(validRoles, user.Role) {
+				h.log.Warn("unauthorized access to protected resource",
+					slog.String("path", c.Request().RequestURI),
+					slog.String("real_ip", c.RealIP()),
+				)
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func (h *Handler) VerifyValidAccount() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			user, ok := c.Get(userClaim).(*UserClaim)
+			if !ok {
+				h.log.Warn("failed to extract claims from context")
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
+			}
+
+			if !user.Validated {
+				h.log.Warn("unvalidated user trying to access are for validated",
+					slog.String("user", user.Email),
+					slog.String("path", c.QueryString()),
+				)
+				return echo.NewHTTPError(http.StatusUnauthorized, "please validate your account")
+			}
+
+			return next(c)
+
+		}
+	}
+}
+
+func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			token := c.Request().Header.Get("x-auth-token")
 			if token == "" {
-				h.log.Warn("unauthenticated attempt to access protected route",
+				h.log.Warn("x-auth-token header missing",
 					"request_ip", c.RealIP(),
 					slog.String("request_url", c.Path()),
 				)
@@ -83,18 +131,9 @@ func (h *Handler) GetAuthMiddleware(userLevel string) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
-			if userLevel == AdminRole && t.Role != AdminRole {
-				h.log.Warn("unauthenticated attempt to access protected route", "user_claim", t, "request", c.Request().URL)
-				return echo.NewHTTPError(http.StatusUnauthorized)
-			}
-
-			h.log.Info("request from user", "user", t)
+			h.log.Debug("request from user", "user", t)
 			c.Set(userClaim, t)
 			return next(c)
 		}
 	}
 }
-
-const (
-	userClaim = "user_claims"
-)

@@ -12,6 +12,7 @@ type Config struct {
 	Level   string
 	Address string
 	Port    int
+	DBPath  string
 }
 
 const (
