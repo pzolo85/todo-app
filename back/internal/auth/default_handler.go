@@ -90,6 +90,10 @@ func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
 			}
 
+			if userClaim.IsAdmin {
+				return next(c)
+			}
+
 			user, err := h.repo.GetUser(userClaim.Email)
 			if err != nil {
 				h.log.Error("failed to get user from db", "err", err.Error())
@@ -101,6 +105,7 @@ func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
 					slog.String("path", c.Request().RequestURI),
 					slog.String("real_ip", c.RealIP()),
 				)
+				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
 			return next(c)
@@ -115,6 +120,10 @@ func (h *Handler) VerifyValidAccount() echo.MiddlewareFunc {
 			if !ok {
 				h.log.Warn("failed to extract claims from context")
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
+			}
+
+			if userClaim.IsAdmin {
+				return next(c)
 			}
 
 			user, err := h.repo.GetUser(userClaim.Email)
@@ -154,6 +163,17 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
+			h.log.Debug("user claim decoded from request", "claim", t)
+			if t.IsAdmin && t.ExpiresAt.Before(time.Now()) {
+				h.log.Warn("auth attempt with expired JWT admin token ", "token", t)
+				return echo.NewHTTPError(http.StatusUnauthorized)
+			}
+
+			if t.IsAdmin {
+				c.Set(UserClaimContextKey, t)
+				return next(c)
+			}
+
 			// verify if token is allowed
 			user, err := h.repo.GetUser(t.Email)
 			if err != nil {
@@ -167,7 +187,6 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
-			h.log.Debug("request from user", "user", t)
 			c.Set(UserClaimContextKey, t)
 			return next(c)
 		}

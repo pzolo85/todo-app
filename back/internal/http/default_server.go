@@ -46,7 +46,7 @@ func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.
 	// add handlers
 	authHandler.AddHandler(authGrp)
 	mailHandler.AddHandler(mailGrp)
-	userHandler.AddHandler(userGrp, authHandler.AddUserClaim())
+	userHandler.AddHandler(userGrp, adminGrp, authHandler.AddUserClaim(), authHandler.VerifyValidAccount())
 
 	return nil
 }

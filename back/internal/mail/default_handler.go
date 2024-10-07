@@ -1,16 +1,24 @@
 package mail
 
 import (
+	"fmt"
 	"net/http"
+
+	"todo/internal/config"
 
 	"github.com/labstack/echo/v4"
 )
 
 type DefaultHandler struct {
+	svc Service
+	cfg *config.Config
 }
 
-func NewDefaultHandler() *DefaultHandler {
-	return &DefaultHandler{}
+func NewDefaultHandler(svc Service, cfg *config.Config) *DefaultHandler {
+	return &DefaultHandler{
+		svc: svc,
+		cfg: cfg,
+	}
 }
 
 type Mails struct {
@@ -23,16 +31,21 @@ type Mail struct {
 }
 
 func (h *DefaultHandler) AddHandler(g *echo.Group) {
-	g.GET("/list", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, &Mails{
-			[]Mail{
-				{
-					Subject: "hello",
-					Link:    "http://as.com",
-					To:      "ptil",
-				},
-			},
-		})
+	g.GET("/list", h.List)
+}
 
+func (h *DefaultHandler) List(c echo.Context) error {
+	chmap := h.svc.ListChallenges()
+	mails := make([]Mail, 0, len(chmap))
+	for challenge, email := range chmap {
+		mails = append(mails, Mail{
+			Subject: fmt.Sprintf("verify your email"),
+			To:      email,
+			Link:    fmt.Sprintf("http://%s:%d/api/v1/user/validate?email=%s&challenge=%s", h.cfg.Address, h.cfg.Port, email, challenge),
+		})
+	}
+
+	return c.JSON(http.StatusOK, Mails{
+		Mails: mails,
 	})
 }

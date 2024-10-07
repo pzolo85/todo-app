@@ -10,8 +10,10 @@ import (
 )
 
 type DefaultRepo struct {
-	db    *bolt.DB
-	cache *cache.Cache
+	db        *bolt.DB
+	cache     *cache.Cache
+	adminRole string
+	userRole  string
 }
 
 var (
@@ -30,7 +32,7 @@ type User struct {
 	SharedWithMe []string  `json:"shared_with_me,omitempty"`
 }
 
-func NewDefaultRepo(db *bolt.DB, cache *cache.Cache) (*DefaultRepo, error) {
+func NewDefaultRepo(db *bolt.DB, cache *cache.Cache, adminRole string, userRole string) (*DefaultRepo, error) {
 	err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(UserBucket); err != nil {
 			return err
@@ -38,8 +40,10 @@ func NewDefaultRepo(db *bolt.DB, cache *cache.Cache) (*DefaultRepo, error) {
 		return nil
 	})
 	return &DefaultRepo{
-		db:    db,
-		cache: cache,
+		db:        db,
+		cache:     cache,
+		adminRole: adminRole,
+		userRole:  userRole,
 	}, err
 }
 
@@ -109,5 +113,69 @@ func (r *DefaultRepo) DeleteUser(email string) error {
 		return fmt.Errorf("failed to delete user > %w", err)
 	}
 
+	return nil
+}
+
+func (r *DefaultRepo) DisableUser(email string) error {
+	usr, err := r.GetUser(email)
+	if err != nil {
+		return fmt.Errorf("failed to get user > %w", err)
+	}
+	usr.ValidEmail = false
+
+	err = r.SaveUser(usr)
+	if err != nil {
+		return fmt.Errorf("failed to save user > %w", err)
+	}
+
+	r.cache.Delete(email)
+	return nil
+}
+
+func (r *DefaultRepo) MakeAdmin(email string) error {
+	usr, err := r.GetUser(email)
+	if err != nil {
+		return fmt.Errorf("failed to get user > %w", err)
+	}
+	usr.Role = r.adminRole
+
+	err = r.SaveUser(usr)
+	if err != nil {
+		return fmt.Errorf("failed to save user > %w", err)
+	}
+
+	r.cache.Delete(email)
+	return nil
+}
+
+func (r *DefaultRepo) DisableAdmin(email string) error {
+	usr, err := r.GetUser(email)
+	if err != nil {
+		return fmt.Errorf("failed to get user > %w", err)
+	}
+	usr.Role = r.userRole
+
+	err = r.SaveUser(usr)
+	if err != nil {
+		return fmt.Errorf("failed to save user > %w", err)
+	}
+
+	r.cache.Delete(email)
+	return nil
+}
+
+func (r *DefaultRepo) EnableUser(email string) error {
+	usr, err := r.GetUser(email)
+	if err != nil {
+		return fmt.Errorf("failed to get user > %w", err)
+	}
+	usr.ValidEmail = true
+
+	err = r.SaveUser(usr)
+	if err != nil {
+		return fmt.Errorf("failed to save user > %w", err)
+	}
+
+	r.cache.Delete(email)
 	return nil
 }

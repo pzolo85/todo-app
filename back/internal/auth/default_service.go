@@ -18,6 +18,8 @@ type DefaultService struct {
 type UserClaim struct {
 	Email     string    `json:"email" mapstructure:"email"`
 	CreatedAt time.Time `json:"created_at" mapstructure:"created_at"`
+	ExpiresAt time.Time `json:"expires_at" mapstructure:"expires_at"`
+	IsAdmin   bool      `json:"is_admin" mapstructure:"is_admin"`
 	SourceIP  string    `json:"source_address" mapstructure:"source_address"`
 	UserAgent string    `json:"user_agent" mapstructure:"user_agent"`
 	ClaimID   string    `json:"claim_id" mapstructure:"claim_id"`
@@ -72,12 +74,20 @@ func (s *DefaultService) DecodeToken(t string) (*UserClaim, error) {
 			slog.Any("value", v),
 		)
 	}
-	mapstructure.Decode(mapClaims, &userClaim)
-	createdAt, err := time.Parse(time.RFC3339, mapClaims["created_at"].(string))
+
+	dhf := mapstructure.StringToTimeHookFunc(time.RFC3339)
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: dhf,
+		Result:     &userClaim,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse created_at")
+		return nil, fmt.Errorf("failed to create custom decoder > %w", err)
 	}
-	userClaim.CreatedAt = createdAt
+
+	err = dec.Decode(mapClaims)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create custom decoder > %w", err)
+	}
 
 	if userClaim.Valid() != nil {
 		return nil, fmt.Errorf("failed to validate claims > %w", userClaim.Valid())
