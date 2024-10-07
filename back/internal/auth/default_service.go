@@ -1,3 +1,10 @@
+// Package auth handles JWT generation and parsing
+//
+// # Middlewares
+//
+// Package auth provides middlewares for authn/authz
+//
+//	AddUserClaim() echo.MiddlewareFunc // Decodes the JWT into a UserClaim in the echo Context
 package auth
 
 import (
@@ -15,6 +22,7 @@ type DefaultService struct {
 	logger        *slog.Logger
 }
 
+// Holds the Claim section of the JWT
 type UserClaim struct {
 	Email     string    `json:"email" mapstructure:"email"`
 	CreatedAt time.Time `json:"created_at" mapstructure:"created_at"`

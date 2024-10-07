@@ -2,7 +2,7 @@ package user
 
 type Repo interface {
 	GetUser(email string) (*User, error)
-	SaveUser(u *User) error
+	SaveUser(u *User, force bool) error
 	DeleteUser(email string) error
 	DisableUser(email string) error
 	MakeAdmin(email string) error

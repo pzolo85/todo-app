@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	"todo/internal/config"
+	"github.com/pzolo85/todo-app/back/internal/config"
 
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"

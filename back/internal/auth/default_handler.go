@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"slices"
 	"time"
-	userDB "todo/internal/repo/user"
+
+	userDB "github.com/pzolo85/todo-app/back/internal/repo/user"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -47,13 +48,13 @@ func (h *Handler) LoginHandler(c echo.Context) error {
 	err := c.Bind(&req)
 	if err != nil {
 		h.log.Error("failed to bind login request", slog.String("error", err.Error()))
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("failed to bind login request > %w", err))
+		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	user, err := h.repo.GetUser(req.Email)
 	if err != nil {
 		h.log.Warn("invalid user login attempt", "email", req.Email)
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("unknown user: %s", req.Email))
+		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	if user.PassHash != req.Hash {
@@ -70,7 +71,7 @@ func (h *Handler) LoginHandler(c echo.Context) error {
 	})
 
 	user.ActiveJWT = append(user.ActiveJWT, token)
-	err = h.repo.SaveUser(user)
+	err = h.repo.SaveUser(user, true)
 	if err != nil {
 		h.log.Error("failed to store user changes to db", "err", err.Error())
 	}
@@ -97,7 +98,7 @@ func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
 			user, err := h.repo.GetUser(userClaim.Email)
 			if err != nil {
 				h.log.Error("failed to get user from db", "err", err.Error())
-				return echo.NewHTTPError(http.StatusInternalServerError)
+				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
 
 			if !slices.Contains(validRoles, user.Role) {
@@ -129,7 +130,7 @@ func (h *Handler) VerifyValidAccount() echo.MiddlewareFunc {
 			user, err := h.repo.GetUser(userClaim.Email)
 			if err != nil {
 				h.log.Error("failed to get user from db", "err", err.Error())
-				return echo.NewHTTPError(http.StatusInternalServerError)
+				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
 
 			if !user.ValidEmail {
@@ -160,7 +161,7 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 			t, err := h.svc.DecodeToken(token)
 			if err != nil {
 				h.log.Warn("error attempting to decode", "err", err.Error())
-				return echo.NewHTTPError(http.StatusUnauthorized)
+				return echo.NewHTTPError(http.StatusUnauthorized, err)
 			}
 
 			h.log.Debug("user claim decoded from request", "claim", t)
@@ -178,7 +179,7 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 			user, err := h.repo.GetUser(t.Email)
 			if err != nil {
 				h.log.Error("failed to get user from db", "err", err.Error())
-				return echo.NewHTTPError(http.StatusInternalServerError)
+				return echo.NewHTTPError(http.StatusInternalServerError, err)
 
 			}
 

@@ -1,4 +1,4 @@
-module todo
+module github.com/pzolo85/todo-app/back
 
 go 1.23.2
 

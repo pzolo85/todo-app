@@ -110,7 +110,7 @@ const banner = `
 const summary = `
 
 
- todo-app is the backend of a web app for creating and sharing To-Do lists
+ github.com/pzolo85/todo-app/back-app is the backend of a web app for creating and sharing To-Do lists
  
  Usage:
 

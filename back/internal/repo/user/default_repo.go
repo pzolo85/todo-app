@@ -72,24 +72,39 @@ func (r *DefaultRepo) GetUser(email string) (*User, error) {
 
 		return nil
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user from db > %w", err)
+	}
 
 	r.cache.Set(email, &user, cache.DefaultExpiration)
 	return &user, err
 }
 
-func (r *DefaultRepo) SaveUser(u *User) error {
-	userBytes, err := json.Marshal(u)
-	if err != nil {
-		return fmt.Errorf("failed to marshal user > %w", err)
-	}
-
+func (r *DefaultRepo) SaveUser(u *User, force bool) error {
 	r.cache.Delete(u.Email)
+	key := []byte(u.Email)
 
-	err = r.db.Update(func(tx *bolt.Tx) error {
+	err := r.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(UserBucket)
 		if b == nil {
 			return fmt.Errorf("user bucket not found")
 		}
+
+		// Try to create a user with only email set to delete existing user
+		if u.CreatedAt.IsZero() {
+			return b.Delete(key)
+		}
+
+		existing := b.Get(key)
+		if existing != nil && !force {
+			return fmt.Errorf("user %s already exists", u.Email)
+		}
+
+		userBytes, err := json.Marshal(u)
+		if err != nil {
+			return fmt.Errorf("failed to marshal user > %w", err)
+		}
+
 		return b.Put([]byte(u.Email), userBytes)
 	})
 	if err != nil {
@@ -100,15 +115,10 @@ func (r *DefaultRepo) SaveUser(u *User) error {
 }
 
 func (r *DefaultRepo) DeleteUser(email string) error {
-	r.cache.Delete(email)
-
-	err := r.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(UserBucket)
-		if b == nil {
-			return fmt.Errorf("user bucket not found")
-		}
-		return b.Delete([]byte(email))
-	})
+	u := &User{
+		Email: email,
+	}
+	err := r.SaveUser(u, true)
 	if err != nil {
 		return fmt.Errorf("failed to delete user > %w", err)
 	}
@@ -123,12 +133,11 @@ func (r *DefaultRepo) DisableUser(email string) error {
 	}
 	usr.ValidEmail = false
 
-	err = r.SaveUser(usr)
+	err = r.SaveUser(usr, true)
 	if err != nil {
 		return fmt.Errorf("failed to save user > %w", err)
 	}
 
-	r.cache.Delete(email)
 	return nil
 }
 
@@ -139,12 +148,11 @@ func (r *DefaultRepo) MakeAdmin(email string) error {
 	}
 	usr.Role = r.adminRole
 
-	err = r.SaveUser(usr)
+	err = r.SaveUser(usr, true)
 	if err != nil {
 		return fmt.Errorf("failed to save user > %w", err)
 	}
 
-	r.cache.Delete(email)
 	return nil
 }
 
@@ -155,12 +163,11 @@ func (r *DefaultRepo) DisableAdmin(email string) error {
 	}
 	usr.Role = r.userRole
 
-	err = r.SaveUser(usr)
+	err = r.SaveUser(usr, true)
 	if err != nil {
 		return fmt.Errorf("failed to save user > %w", err)
 	}
 
-	r.cache.Delete(email)
 	return nil
 }
 
@@ -171,11 +178,10 @@ func (r *DefaultRepo) EnableUser(email string) error {
 	}
 	usr.ValidEmail = true
 
-	err = r.SaveUser(usr)
+	err = r.SaveUser(usr, true)
 	if err != nil {
 		return fmt.Errorf("failed to save user > %w", err)
 	}
 
-	r.cache.Delete(email)
 	return nil
 }

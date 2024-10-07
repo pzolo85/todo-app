@@ -3,9 +3,10 @@ package http
 import (
 	"fmt"
 	"log/slog"
-	"todo/internal/auth"
-	"todo/internal/mail"
-	"todo/internal/user"
+
+	"github.com/pzolo85/todo-app/back/internal/auth"
+	"github.com/pzolo85/todo-app/back/internal/mail"
+	"github.com/pzolo85/todo-app/back/internal/user"
 
 	"github.com/labstack/echo/v4"
 )

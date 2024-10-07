@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"todo/internal/config"
+	"github.com/pzolo85/todo-app/back/internal/config"
 
 	"github.com/labstack/echo/v4"
 )

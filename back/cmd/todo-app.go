@@ -1,3 +1,8 @@
+// Copyright 2024 pzolo85. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// todo-app
 package main
 
 import (
@@ -5,13 +10,14 @@ import (
 	"log/slog"
 	"os"
 	"time"
-	"todo/internal/auth"
-	"todo/internal/config"
-	"todo/internal/http"
-	"todo/internal/log"
-	"todo/internal/mail"
-	userDB "todo/internal/repo/user"
-	"todo/internal/user"
+
+	"github.com/pzolo85/todo-app/back/internal/auth"
+	"github.com/pzolo85/todo-app/back/internal/config"
+	"github.com/pzolo85/todo-app/back/internal/http"
+	"github.com/pzolo85/todo-app/back/internal/log"
+	"github.com/pzolo85/todo-app/back/internal/mail"
+	userDB "github.com/pzolo85/todo-app/back/internal/repo/user"
+	"github.com/pzolo85/todo-app/back/internal/user"
 
 	"github.com/boltdb/bolt"
 	"github.com/golang-jwt/jwt"
@@ -20,6 +26,7 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+// Services is a group of services and handlers.
 type Services struct {
 	logger  *slog.Logger
 	AuthSvc *auth.DefaultService
@@ -38,7 +45,7 @@ func main() {
 		// we don't want to lock here waiting for the default db when loading the services
 		file, err := os.CreateTemp(os.TempDir(), "todo_db_*")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to reate tmp db > %s", err.Error())
+			fmt.Fprintf(os.Stderr, "failed to create tmp db > %s", err.Error())
 		}
 
 		cfg.DBPath = file.Name()
@@ -52,13 +59,13 @@ func main() {
 	// cli options
 	switch {
 	case cfg.GenerateKey:
-		if err := generateKey(cfg); err != nil {
+		if err := GenerateKey(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(2)
 		}
 		os.Exit(0)
 	case cfg.SignAdminToken:
-		if err := generateToken(cfg, svc.AuthSvc); err != nil {
+		if err := GenerateToken(cfg, svc.AuthSvc); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(2)
 		}
@@ -70,7 +77,8 @@ func main() {
 
 }
 
-func generateKey(cfg *config.Config) error {
+// GenerateKey generates a passphrase for JWT validation
+func GenerateKey(cfg *config.Config) error {
 	defer os.Remove(cfg.DBPath)
 	key := uuid.NewString()
 	err := os.WriteFile(config.KeyFile, []byte(key), 0400)
@@ -81,7 +89,8 @@ func generateKey(cfg *config.Config) error {
 	return nil
 }
 
-func generateToken(cfg *config.Config, authSvc auth.Service) error {
+// GenerateToken generates a JWT with admin permissions
+func GenerateToken(cfg *config.Config, authSvc auth.Service) error {
 	defer os.Remove(cfg.DBPath)
 	now := time.Now()
 	c := auth.UserClaim{
@@ -151,5 +160,4 @@ func loadServices(cfg *config.Config) (*Services, error) {
 		AuthHdl: authHandler,
 		Server:  srv,
 	}, nil
-
 }
