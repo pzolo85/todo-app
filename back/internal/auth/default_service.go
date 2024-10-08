@@ -14,27 +14,13 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pzolo85/todo-app/back/internal/claim"
 )
 
 type DefaultService struct {
 	key           []byte
 	signingMethod jwt.SigningMethod
 	logger        *slog.Logger
-}
-
-// Holds the Claim section of the JWT
-type UserClaim struct {
-	Email     string    `json:"email" mapstructure:"email"`
-	CreatedAt time.Time `json:"created_at" mapstructure:"created_at"`
-	ExpiresAt time.Time `json:"expires_at" mapstructure:"expires_at"`
-	IsAdmin   bool      `json:"is_admin" mapstructure:"is_admin"`
-	SourceIP  string    `json:"source_address" mapstructure:"source_address"`
-	UserAgent string    `json:"user_agent" mapstructure:"user_agent"`
-	ClaimID   string    `json:"claim_id" mapstructure:"claim_id"`
-}
-
-func (u UserClaim) Valid() error {
-	return validateUser(&u)
 }
 
 func NewDefaultService(key []byte, signingMethod jwt.SigningMethod, logger *slog.Logger) *DefaultService {
@@ -45,7 +31,7 @@ func NewDefaultService(key []byte, signingMethod jwt.SigningMethod, logger *slog
 	}
 }
 
-func (s *DefaultService) GetJWT(u *UserClaim) (string, error) {
+func (s *DefaultService) GetJWT(u *claim.UserClaim) (string, error) {
 	if err := u.Valid(); err != nil {
 		return "", err
 	}
@@ -59,7 +45,7 @@ func (s *DefaultService) GetJWT(u *UserClaim) (string, error) {
 	return tstr, nil
 }
 
-func (s *DefaultService) DecodeToken(t string) (*UserClaim, error) {
+func (s *DefaultService) DecodeToken(t string) (*claim.UserClaim, error) {
 	token, err := jwt.Parse(t, func(t *jwt.Token) (any, error) {
 		if t.Method != s.signingMethod {
 			return nil, fmt.Errorf("invalid signing method: %s", t.Method)
@@ -70,7 +56,7 @@ func (s *DefaultService) DecodeToken(t string) (*UserClaim, error) {
 		return nil, fmt.Errorf("failed to parse token > %w", err)
 	}
 
-	var userClaim UserClaim
+	var userClaim claim.UserClaim
 	mapClaims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, fmt.Errorf("failed to convert claim to mapclaims")
@@ -102,19 +88,4 @@ func (s *DefaultService) DecodeToken(t string) (*UserClaim, error) {
 	}
 
 	return &userClaim, nil
-}
-
-func validateUser(u *UserClaim) error {
-	errFmt := "invalid user claim > %s cannot be nil"
-	switch {
-	case u.Email == "":
-		return fmt.Errorf(errFmt, "email")
-	case u.SourceIP == "":
-		return fmt.Errorf(errFmt, "source_address")
-	case u.UserAgent == "":
-		return fmt.Errorf(errFmt, "user_agent")
-	case u.ClaimID == "":
-		return fmt.Errorf(errFmt, "claim_id")
-	}
-	return nil
 }

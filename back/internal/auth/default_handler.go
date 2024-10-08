@@ -7,7 +7,8 @@ import (
 	"slices"
 	"time"
 
-	userDB "github.com/pzolo85/todo-app/back/internal/repo/user"
+	"github.com/pzolo85/todo-app/back/internal/claim"
+	"github.com/pzolo85/todo-app/back/internal/user"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -15,7 +16,7 @@ import (
 
 type Handler struct {
 	svc  Service
-	repo userDB.Repo
+	repo user.Repo
 	log  *slog.Logger
 }
 
@@ -27,11 +28,9 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
-const (
-	UserClaimContextKey = "user_claims"
-)
+const AuthHeader = "x-auth-token"
 
-func NewDefaultHandler(svc Service, log *slog.Logger, repo userDB.Repo) *Handler {
+func NewDefaultHandler(svc Service, log *slog.Logger, repo user.Repo) *Handler {
 	return &Handler{
 		svc:  svc,
 		log:  log.WithGroup("auth_handler"),
@@ -62,7 +61,7 @@ func (h *Handler) LoginHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("unknown user: %s", req.Email))
 	}
 
-	token, err := h.svc.GetJWT(&UserClaim{
+	token, err := h.svc.GetJWT(&claim.UserClaim{
 		Email:     req.Email,
 		CreatedAt: time.Now(),
 		SourceIP:  c.RealIP(),
@@ -85,7 +84,7 @@ func (h *Handler) LoginHandler(c echo.Context) error {
 func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			userClaim, ok := c.Get(UserClaimContextKey).(*UserClaim)
+			userClaim, ok := c.Get(claim.UserClaimContextKey).(*claim.UserClaim)
 			if !ok {
 				h.log.Warn("failed to extract claims from context")
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
@@ -117,7 +116,7 @@ func (h *Handler) VerifyRole(validRoles []string) echo.MiddlewareFunc {
 func (h *Handler) VerifyValidAccount() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			userClaim, ok := c.Get(UserClaimContextKey).(*UserClaim)
+			userClaim, ok := c.Get(claim.UserClaimContextKey).(*claim.UserClaim)
 			if !ok {
 				h.log.Warn("failed to extract claims from context")
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to extract claims")
@@ -149,7 +148,7 @@ func (h *Handler) VerifyValidAccount() echo.MiddlewareFunc {
 func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			token := c.Request().Header.Get("x-auth-token")
+			token := c.Request().Header.Get(AuthHeader)
 			if token == "" {
 				h.log.Warn("x-auth-token header missing",
 					"request_ip", c.RealIP(),
@@ -171,7 +170,7 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 			}
 
 			if t.IsAdmin {
-				c.Set(UserClaimContextKey, t)
+				c.Set(claim.UserClaimContextKey, t)
 				return next(c)
 			}
 
@@ -188,7 +187,7 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
-			c.Set(UserClaimContextKey, t)
+			c.Set(claim.UserClaimContextKey, t)
 			return next(c)
 		}
 	}

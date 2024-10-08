@@ -6,15 +6,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pzolo85/todo-app/back/internal/auth"
+	"github.com/pzolo85/todo-app/back/internal/claim"
 	"github.com/pzolo85/todo-app/back/internal/mail"
-	userDB "github.com/pzolo85/todo-app/back/internal/repo/user"
 
 	"github.com/labstack/echo/v4"
 )
 
 type DefaultHandler struct {
-	repo     userDB.Repo
+	repo     Repo
 	logger   *slog.Logger
 	mailSvc  mail.Service
 	userRole string
@@ -29,7 +28,7 @@ type ModifyUserRequest struct {
 	Email string `json:"email,omitempty"`
 }
 
-func NewDefaultHandler(repo userDB.Repo, logger *slog.Logger, mailSvc mail.Service, userRole string) *DefaultHandler {
+func NewDefaultHandler(repo Repo, logger *slog.Logger, mailSvc mail.Service, userRole string) *DefaultHandler {
 	return &DefaultHandler{
 		repo:     repo,
 		logger:   logger.WithGroup("user_handler"),
@@ -52,8 +51,8 @@ func (h *DefaultHandler) AddHandler(userGroup *echo.Group, adminGroup *echo.Grou
 }
 
 func (h *DefaultHandler) ResendChallenge(c echo.Context) error {
-	clm := c.Get(auth.UserClaimContextKey)
-	claim, ok := clm.(*auth.UserClaim)
+	clm := c.Get(claim.UserClaimContextKey)
+	claim, ok := clm.(*claim.UserClaim)
 	if !ok {
 		h.logger.Error("failed to parse claim from context", "claim", clm)
 		return echo.NewHTTPError(http.StatusBadRequest)
@@ -68,9 +67,9 @@ func (h *DefaultHandler) ResendChallenge(c echo.Context) error {
 }
 
 func (h *DefaultHandler) Info(c echo.Context) error {
-	clm := c.Get(auth.UserClaimContextKey)
+	clm := c.Get(claim.UserClaimContextKey)
 
-	claim, ok := clm.(*auth.UserClaim)
+	claim, ok := clm.(*claim.UserClaim)
 	if !ok {
 		h.logger.Error("failed to parse claim from context", "claim", clm)
 		return echo.NewHTTPError(http.StatusBadRequest)
@@ -100,13 +99,7 @@ func (h *DefaultHandler) ValidateUser(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadGateway, err)
 	}
 
-	u, err := h.repo.GetUser(email)
-	if err != nil {
-		h.logger.Error("failed to enable user", "err", err.Error())
-		return echo.NewHTTPError(http.StatusBadGateway, err)
-	}
-
-	return c.JSON(http.StatusOK, u)
+	return c.NoContent(http.StatusOK)
 }
 
 func (h *DefaultHandler) MakeAdmin(c echo.Context) error {
@@ -161,9 +154,9 @@ func (h *DefaultHandler) DisableAdmin(c echo.Context) error {
 }
 
 func (h *DefaultHandler) DeleteUser(c echo.Context) error {
-	clm := c.Get(auth.UserClaimContextKey)
+	clm := c.Get(claim.UserClaimContextKey)
 
-	claim, ok := clm.(*auth.UserClaim)
+	claim, ok := clm.(*claim.UserClaim)
 	if !ok {
 		h.logger.Error("failed to parse claim from context", "claim", clm)
 		return echo.NewHTTPError(http.StatusBadRequest)
@@ -187,7 +180,7 @@ func (h *DefaultHandler) CreateUser(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
-	var user = userDB.User{
+	var user = User{
 		Email:        req.Email,
 		PassHash:     req.HashedPass,
 		Salt:         req.Salt,
@@ -211,5 +204,5 @@ func (h *DefaultHandler) CreateUser(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusAccepted, user)
+	return c.JSON(http.StatusOK, user)
 }

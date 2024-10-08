@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/pzolo85/todo-app/back/internal/auth"
+	"github.com/pzolo85/todo-app/back/internal/claim"
 	"github.com/pzolo85/todo-app/back/internal/config"
 	"github.com/pzolo85/todo-app/back/internal/http"
 	"github.com/pzolo85/todo-app/back/internal/log"
 	"github.com/pzolo85/todo-app/back/internal/mail"
-	userDB "github.com/pzolo85/todo-app/back/internal/repo/user"
 	"github.com/pzolo85/todo-app/back/internal/user"
 
 	"github.com/boltdb/bolt"
@@ -93,7 +93,7 @@ func GenerateKey(cfg *config.Config) error {
 func GenerateToken(cfg *config.Config, authSvc auth.Service) error {
 	defer os.Remove(cfg.DBPath)
 	now := time.Now()
-	c := auth.UserClaim{
+	c := claim.UserClaim{
 		Email:     cfg.SignEmail,
 		CreatedAt: now,
 		ExpiresAt: now.Add(cfg.SignDuration),
@@ -134,7 +134,7 @@ func loadServices(cfg *config.Config) (*Services, error) {
 
 	// user
 	userCache := cache.New(time.Hour, time.Minute*20)
-	userRepo, err := userDB.NewDefaultRepo(db, userCache, cfg.AdminRole, cfg.UserRole)
+	userRepo, err := user.NewDefaultRepo(db, userCache, cfg.AdminRole, cfg.UserRole)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create userRepo > %w", err)
 	}
