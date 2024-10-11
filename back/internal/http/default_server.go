@@ -27,7 +27,7 @@ func GetDefaultServer(echo *echo.Echo, log *slog.Logger, adminRole string) *Defa
 
 func (s *DefaultServer) LoadRoutes(authHandler *auth.Handler, mailHandler *mail.DefaultHandler, userHandler *user.DefaultHandler) error {
 	// api/v1
-	v1grp := s.srv.Group("/api/v1")
+	v1grp := s.srv.Group("/api/v1", authHandler.AddAppID())
 
 	// user
 	userGrp := v1grp.Group("/user")

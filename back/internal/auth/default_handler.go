@@ -150,6 +150,9 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			token := c.Request().Header.Get(AuthHeader)
 			if token == "" {
+				token = c.QueryParam("token")
+			}
+			if token == "" {
 				h.log.Warn("x-auth-token header missing",
 					"request_ip", c.RealIP(),
 					slog.String("request_url", c.Path()),
@@ -165,7 +168,7 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 
 			h.log.Debug("user claim decoded from request", "claim", t)
 			if t.IsAdmin && t.ExpiresAt.Before(time.Now()) {
-				h.log.Warn("auth attempt with expired JWT admin token ", "token", t)
+				h.log.Warn("auth attempt with expired JWT admin token", "token", t)
 				return echo.NewHTTPError(http.StatusUnauthorized)
 			}
 
@@ -191,4 +194,21 @@ func (h *Handler) AddUserClaim() echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+func (h *Handler) AddAppID() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			appID := c.Request().Header.Get("x-app-id")
+			if appID == "" {
+				appID = c.QueryParam("appid")
+			}
+			if appID == "" {
+				return echo.NewHTTPError(http.StatusBadRequest, "x-app-id header is missing")
+			}
+			c.Set(claim.AppIDContextKey, appID)
+			return next(c)
+		}
+	}
+
 }

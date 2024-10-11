@@ -11,12 +11,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/dunglas/mercure"
 	"github.com/pzolo85/todo-app/back/internal/auth"
 	"github.com/pzolo85/todo-app/back/internal/claim"
 	"github.com/pzolo85/todo-app/back/internal/config"
 	"github.com/pzolo85/todo-app/back/internal/http"
 	"github.com/pzolo85/todo-app/back/internal/log"
 	"github.com/pzolo85/todo-app/back/internal/mail"
+	"github.com/pzolo85/todo-app/back/internal/notify"
 	"github.com/pzolo85/todo-app/back/internal/user"
 
 	"github.com/boltdb/bolt"
@@ -73,6 +75,7 @@ func main() {
 	}
 
 	svc.logger.Debug("config", "cfg", cfg)
+
 	svc.Server.Start(cfg.Address, cfg.Port)
 
 }
@@ -127,10 +130,20 @@ func loadServices(cfg *config.Config) (*Services, error) {
 		return nil, fmt.Errorf("failed to open db > %w", err)
 	}
 
+	// notify
+	mercureHub, err := mercure.NewHub(
+		mercure.WithAnonymous(),
+		mercure.WithPublisherJWT(cfg.Key, jwt.SigningMethodHS256.Name),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create mercure hub >%w", err)
+	}
+	notifySvc, err := notify.NewDefaultService(cfg.Key, mercureHub, logger)
+
 	// mail
 	mailCache := cache.New(time.Hour*24, time.Hour)
-	mailSvc := mail.NewDefaultService(logger, mailCache, cfg)
-	mailHandler := mail.NewDefaultHandler(mailSvc, cfg)
+	mailSvc := mail.NewDefaultService(logger, notifySvc, mailCache, cfg)
+	mailHandler := mail.NewDefaultHandler(mailSvc, notifySvc, cfg)
 
 	// user
 	userCache := cache.New(time.Hour, time.Minute*20)

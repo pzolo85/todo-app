@@ -8,6 +8,7 @@ import (
 
 const (
 	UserClaimContextKey = "user_claims"
+	AppIDContextKey     = "app_id"
 )
 
 // Holds the Claim section of the JWT

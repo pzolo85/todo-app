@@ -192,15 +192,15 @@ func (h *DefaultHandler) CreateUser(c echo.Context) error {
 		SharedWithMe: []string{},
 	}
 
-	err = h.mailSvc.SendChallenge(req.Email)
-	if err != nil {
-		h.logger.Error("failed to send email challenge", "err", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
-	}
-
 	err = h.repo.SaveUser(&user, false)
 	if err != nil {
 		h.logger.Error("failed to save user to db", "err", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
+	}
+
+	err = h.mailSvc.SendChallenge(req.Email)
+	if err != nil {
+		h.logger.Error("failed to send email challenge", "err", err.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
